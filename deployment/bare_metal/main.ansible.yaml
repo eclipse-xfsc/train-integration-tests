@@ -1,0 +1,11 @@
+- name: Main
+  hosts: all
+  vars:
+    custom_shell_config: "{{ lookup('ansible.builtin.env', 'CUSTOM_SHELL_CONFIG', default='.bash_profile') }}"
+  tasks:
+    - include_tasks: "./tools.ansible.yaml"
+      tags:
+        - tools
+    - include_tasks: "./python.ansible.yaml"
+      tags:
+        - py

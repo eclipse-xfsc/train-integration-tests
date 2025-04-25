@@ -1,0 +1,21 @@
+@startuml
+
+actor "BDD-Steps"
+participant "TSPA Server"
+participant "DNS Zone Manager Server"
+participant "https://<WEB:DID>/.well-known/openid-configuration" as WebDidServer
+actor DID
+actor DNS
+
+"BDD-Steps" --> "TSPA Server": Attach WEB:DID to existing Pointer
+
+activate "TSPA Server"
+"TSPA Server" --> WebDidServer: HTTP GET
+WebDidServer --> "TSPA Server": 200
+"TSPA Server" --> "DNS Zone Manager Server": publishDIDUri(trustframework, data)
+"TSPA Server" --> "TSPA Server": storeTrustService(trustframework, data)
+deactivate "TSPA Server"
+
+ "TSPA Server" --> "BDD-Steps": HTTP 201
+@enduml
+

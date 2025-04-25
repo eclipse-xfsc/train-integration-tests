@@ -1,0 +1,140 @@
+# commands
+# docker-compose up --build --remove-orphans eu-xfsc-bdd-train eu-xfsc-bdd-train-dev
+# docker-compose run --rm  eu-xfsc-bdd-train bash
+version: "3.9"
+
+
+services:
+  eu-xfsc-bdd-train:
+    image: ${IMAGE_EU_XFSC_BDD_TRAIN}:${TRAIN_DOCKER_IMAGE_TAG}
+    build:
+      dockerfile: ./deployment/docker/Dockerfile
+      context: ../..
+      args:
+        IMAGE_EU_XFSC_BDD_CORE: ${IMAGE_EU_XFSC_BDD_CORE}
+    container_name: eu-xfsc-bdd-train
+    volumes:
+      - ../../src/eu/xfsc/bdd/train:/home/xfsc/.local/lib/python3.12/site-packages/eu/xfsc/bdd/train
+      - ../../src:/home/xfsc/eu.xfsc.bdd.train/src
+      - ../../setup.cfg:/home/xfsc/eu.xfsc.bdd.train/setup.cfg
+      - ../../features:/home/xfsc/eu.xfsc.bdd.train/features
+      - ../../steps:/home/xfsc/eu.xfsc.bdd.train/steps
+      - ../../environment.py:/home/xfsc/eu.xfsc.bdd.train/environment.py
+      - ../../env.sh:/home/xfsc/eu.xfsc.bdd.train/env.sh
+    user: "1001"
+
+  eu-xfsc-bdd-train-dev:
+    image: ${IMAGE_EU_XFSC_BDD_TRAIN}-dev:${TRAIN_DOCKER_IMAGE_TAG}
+    build:
+      dockerfile: ./deployment/docker/Dockerfile.dev
+      context: ../..
+      args:
+        IMAGE_EU_XFSC_BDD_TRAIN: ${IMAGE_EU_XFSC_BDD_TRAIN}:${TRAIN_DOCKER_IMAGE_TAG}
+
+    container_name: eu-xfsc-bdd-train-dev
+    volumes:
+      - ../../src/eu/xfsc/bdd/train:/home/xfsc/.local/lib/python3.12/site-packages/eu/xfsc/bdd/train
+      - ../../src:/home/xfsc/eu.xfsc.bdd.train/src
+      - ../../setup.cfg:/home/xfsc/eu.xfsc.bdd.train/setup.cfg
+    user: "1001"
+    depends_on:
+      - eu-xfsc-bdd-train
+
+  keycloak:
+    container_name: keycloak
+    image: quay.io/keycloak/keycloak:23.0.7-0
+    ports:
+      - "8080:8080"
+
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: dev-password
+      KEYCLOAK_LOGLEVEL: INFO
+      ROOT_LOGLEVEL: INFO
+
+    volumes:
+      - ./env/${TRAIN_ENV}/keycloak/realms:/opt/keycloak/data/import
+
+    command: [ "start-dev", "--import-realm", "--hostname-url=http://keycloak:8080/" ]
+
+  train-dns-zone-manager-server:
+    container_name: train-dns-zone-manager-server
+    image: localhost/train/dns-zone-manager-server
+    build:
+      dockerfile: Dockerfile
+      context: ../../submodule/dns-zone-manager
+    environment:
+      TRAIN_DNS_ZM_SERVER_PORT: ${TRAIN_DNS_ZM_SERVER_PORT}
+
+      # DNS will take this credentials form auth.conf
+      # in deployment/docker/env/dev-with-docker-compose/config/zm/auth.conf
+      # ISSUER_URL = "http://keycloak:8080/realms/gxfs-dev-test"
+      # CLIENT_ID = "account"
+      # ALLOW_UNSAFE_SSL = "false"
+
+      #TRAIN_ZM_KEYCLOAK_URL: ${TRAIN_ZM_KEYCLOAK_URL}
+      #TRAIN_ZM_KEYCLOAK_REALM: ${TRAIN_ZM_KEYCLOAK_REALM}
+      #TRAIN_ZM_KEYCLOAK_CLIENT_ID: ${TRAIN_ZM_KEYCLOAK_CLIENT_ID}
+      #TRAIN_ZM_KEYCLOAK_CLIENT_SECRET: ${TRAIN_ZM_KEYCLOAK_CLIENT_SECRET}
+      #TRAIN_ZM_KEYCLOAK_SCOPE: ${TRAIN_ZM_KEYCLOAK_SCOPE}
+    ports:
+      - "${TRAIN_DNS_ZM_SERVER_PORT}:${TRAIN_DNS_ZM_SERVER_PORT}/tcp"
+      - "53:53/udp"
+    volumes:
+      - ./env/${TRAIN_ENV}/zm/var/lib/zonemgr/:/var/lib/zonemgr
+      - ./env/${TRAIN_ENV}/config/zm/config.conf:/usr/lib/zonemgr/config.conf
+      - ./env/${TRAIN_ENV}/config/zm/auth.conf:/usr/lib/zonemgr/auth.conf
+
+  train-dns-zone-manager-ui:
+    container_name: train-dns-zone-manager-ui
+    image: tdzm-ui:latest
+    build:
+      dockerfile: Dockerfile
+      context: ../../submodule/dns-zone-manager/ui
+    ports:
+      - "8001:80"
+    environment:
+      ZONEMGR_URL: http://train-dns-zone-manager-server:${TRAIN_DNS_ZM_SERVER_PORT}
+      OIDC_ISSUER_URL: http://keycloak:8080/realms/${TRAIN_ZM_KEYCLOAK_REALM}
+      OIDC_CLIENT_ID: $TRAIN_ZM_KEYCLOAK_CLIENT_ID
+      OIDC_CLIENT_SECRET: $TRAIN_ZM_KEYCLOAK_CLIENT_SECRET
+      OIDC_SCOPES: "openid email profile"
+      UI_HOST: http://localhost:8001
+      COOKIE_SECRET: ashdhfghsaghasghasfahsjkf
+      NODE_TLS_REJECT_UNAUTHORIZED: 0
+
+  train-tspa-server:
+    container_name: train-tspa-server
+    build:
+      dockerfile: Dockerfile
+      context: ../../submodule/tspa
+    image: localhost/train/tspa-server
+    ports:
+      - "${TRAIN_TSPA_SERVER_PORT}:${TRAIN_TSPA_SERVER_PORT}"
+    environment:
+      TRAIN_TSPA_SERVER_PORT: ${TRAIN_TSPA_SERVER_PORT}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/${TRAIN_TSPA_KEYCLOAK_REALM}
+      ZONEMANAGER_ADDRESS: "http://train-dns-zone-manager-server:${TRAIN_DNS_ZM_SERVER_PORT}"
+      #ZONEMANAGER_TOKEN_SERVER_URL: $TRAIN_TSPA_KEYCLOAK_URL/realms/${TRAIN_TSPA_KEYCLOAK_REALM}/protocol/openid-connect/token
+      ZONEMANAGER_TOKEN_SERVER_URL: http://keycloak:8080/realms/${TRAIN_TSPA_KEYCLOAK_REALM}/protocol/openid-connect/token
+
+      ZONEMANAGER_CLIENT_ID: $TRAIN_TSPA_KEYCLOAK_CLIENT_ID
+      ZONEMANAGER_CLIENT_SECRET: $TRAIN_TSPA_KEYCLOAK_CLIENT_SECRET
+      ZONEMANAGER_GRANT_TYPE: client_credentials
+      TRAIN_TSPA_KEYCLOAK_SCOPE: $TRAIN_TSPA_KEYCLOAK_SCOPE
+      REQUEST_GET_MAPPING: http://train-tspa-server:${TRAIN_TSPA_SERVER_PORT}/tspa-service/tspa/v1/
+
+      TRUSTLIST_VC_SIGNER_TYPE: "INTERNAL"
+
+  train-tcr-server:
+    container_name: train-tcr-server
+    build:
+      dockerfile: Dockerfile
+      context: ../../submodule/trusted-content-resolver/service
+    image: localhost/train/tcr-server
+    environment:
+      TRAIN_TCR_SERVER_PORT: ${TRAIN_TCR_SERVER_PORT}
+      TRAIN_TCR_DNS_HOSTS: ${TRAIN_TCR_DNS_HOSTS}
+      TRAIN_TCR_DID_BASE_URI: ${TRAIN_TCR_DID_BASE_URI}
+    ports:
+      - "${TRAIN_TCR_SERVER_PORT}:8087"

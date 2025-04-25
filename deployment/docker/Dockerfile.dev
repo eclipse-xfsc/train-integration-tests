@@ -1,0 +1,11 @@
+ARG IMAGE_EU_XFSC_BDD_TRAIN
+FROM ${IMAGE_EU_XFSC_BDD_TRAIN}
+
+USER root
+
+RUN apt install vim -y
+
+USER xfsc
+
+RUN pip uninstall eu-xfsc-bdd-train -y
+RUN pip install -e "./eu.xfsc.bdd.train[dev]"

@@ -1,0 +1,9 @@
+[submodule "submodule/trusted-content-resolver"]
+	path = submodule/trusted-content-resolver
+	url = git@gitlab.eclipse.org:eclipse/xfsc/train/trusted-content-resolver.git
+[submodule "submodule/dns-zone-manager"]
+	path = submodule/dns-zone-manager
+	url = git@gitlab.eclipse.org:eclipse/xfsc/train/dns-zone-manager.git
+[submodule "submodule/tspa"]
+	path = submodule/tspa
+	url = git@gitlab.eclipse.org:eclipse/xfsc/train/tspa.git

@@ -1,0 +1,23 @@
+- name: Install Linux aptitude packages
+  apt:
+    name:
+      - git
+      - graphviz
+    state: present
+  when: ansible_distribution == 'Ubuntu'
+  become: true
+  become_method: sudo
+  tags:
+    - Ubuntu
+    - py
+
+- name: Install MacOSX brew packages
+  homebrew:
+    name:
+      - git
+      - graphviz
+    state: present
+  when: ansible_distribution == 'MacOSX'
+  tags:
+    - MacOSX
+    - py
