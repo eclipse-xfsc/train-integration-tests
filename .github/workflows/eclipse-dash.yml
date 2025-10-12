@@ -15,3 +15,5 @@ jobs:
   call-remote-dash-workflow:
     secrets: inherit
     uses: eclipse-xfsc/dev-ops/.github/workflows/eclipse-dash-licence-python.yml@main
+    with:
+      requirements_path: 'requirements.txt'
